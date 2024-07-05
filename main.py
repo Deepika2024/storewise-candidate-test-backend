@@ -1,181 +1,85 @@
-import traceback
-from doctest import UnexpectedException
-from typing import List
+from prompt_toolkit import prompt
+from prompt_toolkit.completion import Completer, Completion
 
-from bullet import Bullet, colors, utils
+class MenuCompleter(Completer):
+    def _init_(self, words):
+        self.words = words
 
+    def get_completions(self, document, complete_event):
+        word_before_cursor = document.get_word_before_cursor()
+        for word in self.words:
+            if word.startswith(word_before_cursor):
+                yield Completion(word, start_position=-len(word_before_cursor))
 
-class PurchaseItem(object):
-    def __init__(self, option):
-        self.price = option.p
-        self.name = str(option)
+class McDonaldsShell:
+    def _init_(self):
+        self.menu = {
+            'Big Mac': 5.00,
+            'McChicken': 4.00,
+            'Fries': 2.50,
+            'Coke': 1.50
+        }
+        self.order = []
+        self.service_charge_rate = 0.1  # 10% service charge
 
+    def display_menu(self):
+        print("\nCurrent Menu:")
+        for item, price in self.menu.items():
+            print(f"{item}: ${price:.2f}")
+        print()
 
-def get_total_order_amount(order: List[PurchaseItem]):
+    def add_menu_item(self):
+        item_name = prompt("Enter the name of the new menu item: ").strip()
+        while True:
+            try:
+                item_price = float(prompt("Enter the price of the new menu item: ").strip())
+                break
+            except ValueError:
+                print("Invalid price. Please enter a numeric value.")
+        self.menu[item_name] = item_price
+        print(f"Added {item_name} to the menu with price ${item_price:.2f}\n")
 
-    """
-    The total cost of all the items ordered
-    """
+    def take_order(self):
+        print("Welcome to the McDonalds Shell!")
+        while True:
+            action = prompt("Type 'order' to place an order, 'add' to add a new item to the menu, or 'done' to finish: ").strip().lower()
+            if action == 'done':
+                break
+            elif action == 'add':
+                self.add_menu_item()
+            elif action == 'order':
+                self.order_items()
+            else:
+                print("Invalid action. Please choose 'order', 'add', or 'done'.")
 
-    raise NotImplementedError(
-        "REMOVE the error and RETURN the total amount for the order"
-    )
+    def order_items(self):
+        self.display_menu()
+        menu_completer = MenuCompleter(list(self.menu.keys()))
 
+        while True:
+            item = prompt("Please select items to order (type 'done' to finish ordering): ", completer=menu_completer).strip()
+            if item.lower() == 'done':
+                break
+            if item in self.menu:
+                self.order.append(item)
+                print(f"Added {item} to your order.")
+            else:
+                print("Item not on the menu. Please select a valid item.")
 
-def get_service_charge(order: List[PurchaseItem]):
+    def calculate_bill(self):
+        order_amount = sum(self.menu[item] for item in self.order)
+        service_charge = order_amount * self.service_charge_rate
+        final_amount = order_amount + service_charge
+        return order_amount, service_charge, final_amount
 
-    """
-    For every Rs. 100, the service charge amount should increase by 1% of order amount, upto a max of 20%
-    Eg:
-        Order Amount = 80, Service Charge = 0
-        Order Amount = 150, Service Charge = 1.5
-        Order Amount = 800, Service Charge = 64
-        Order Amount = 1500, Service Charge = 225
-        Order Amount = 3000, Service Charge = 600
-    """
+    def print_bill(self):
+        order_amount, service_charge, final_amount = self.calculate_bill()
+        print("\nYour bill:")
+        print(f"Order Amount: ${order_amount:.2f}")
+        print(f"Service Charge (10%): ${service_charge:.2f}")
+        print(f"Final Amount: ${final_amount:.2f}")
 
-    raise NotImplementedError(
-        "REMOVE the error and RETURN service charge amount for the order"
-    )
-
-
-class Option(object):
-    def __init__(self, n=None, pu=None, p=None, d=None):
-        self.p = p
-        self.n = n
-        self.pu = pu
-        if d:
-            self.n = d.get("name")
-            self.p = d.get("price")
-        if self.p == None:
-            self.p = 0
-        if self.n == None:
-            raise AttributeError
-        self.pu = self.pu if self.pu else "Rs."
-
-    def __str__(self):
-        return f"{str(self.n)} {str(self.pu) + ' ' + str(self.p) if self.p else ''}"
-
-    def __len__(self):
-        return len(self.__str__())
-
-
-MCDONALDS_FOOD_OPTIONS = [
-    Option(d={"name": "Veg Burger", "price": 115.00}),
-    Option(d={"name": "Veg Wrap", "price": 130.00}),
-    Option(d={"name": "Veg Happy Meal", "price": 215.00}),
-    Option(d={"name": "Chicken Burger", "price": 175.00}),
-    Option(d={"name": "Chicken Wrap", "price": 195.00}),
-    Option(d={"name": "No, that's all", "price": 0.00}),
-]
-
-MCDONALDS_BEVERAGES_OPTIONS = [
-    Option(d={"name": "Sprite (M)", "price": 115.00}),
-    Option(d={"name": "Sprite (L)", "price": 130.00}),
-    Option(d={"name": "Mango Smoothie", "price": 215.00}),
-    Option(d={"name": "Chocolate Smoothie", "price": 175.00}),
-    Option(d={"name": "Chocolate Smoothie w/ Icecream", "price": 195.00}),
-    Option(d={"name": "No, that's all", "price": 0.00}),
-]
-
-
-def get_option_from_result(result, options):
-    for option in options:
-        if str(option) == result:
-            return option
-
-    raise UnexpectedException
-
-
-def print_order(order):
-    print()
-
-    try:
-        total_amount = get_total_order_amount(order)
-    except:
-        traceback.print_exc()
-        total_amount = "ERROR"
-
-    service_charge = "ERROR"
-    if total_amount != "ERROR":
-        try:
-            service_charge = get_service_charge(order)
-        except:
-            traceback.print_exc()
-            service_charge = "ERROR"
-
-    utils.cprint(
-        "Final Order", color=colors.foreground["green"], on=colors.background["yellow"]
-    )
-    for i, item in enumerate(order):
-        utils.cprint(
-            f"{i+1}. {item.name}",
-            color=colors.foreground["yellow"],
-            on=colors.background["green"],
-        )
-
-    utils.cprint(
-        f"Order Amount: {str(total_amount)}",
-        color=colors.foreground["green"],
-        on=colors.background["yellow"],
-    )
-    utils.cprint(
-        f"Service Charge: {str(service_charge)}",
-        color=colors.foreground["green"],
-        on=colors.background["yellow"],
-    )
-    utils.cprint(
-        f"Final Amount: {str(total_amount + service_charge) if isinstance(total_amount, (int, float)) and isinstance(service_charge, (int, float)) else 'ERROR'}",
-        color=colors.foreground["green"],
-        on=colors.background["yellow"],
-    )
-
-
-print()
-utils.cprint(
-    "Welcome to McDonalds on your shell :)",
-    color=colors.foreground["blue"],
-    on=colors.background["white"],
-)
-utils.cprint(
-    "Here you can place your order        ",
-    color=colors.foreground["blue"],
-    on=colors.background["white"],
-)
-utils.cprint(
-    "And then we will show you your bill  ",
-    color=colors.foreground["blue"],
-    on=colors.background["white"],
-)
-print()
-order = []
-while True:
-    options = list(map(lambda x: str(x), MCDONALDS_FOOD_OPTIONS))
-    bullet = Bullet(prompt="Add an item", choices=options, bullet="=> ")
-    result = bullet.launch()
-    utils.clearConsoleUp(7)
-    option = get_option_from_result(result, MCDONALDS_FOOD_OPTIONS)
-    if result == str(MCDONALDS_FOOD_OPTIONS[-1]):
-        break
-    order.append(PurchaseItem(option))
-    utils.cprint(
-        f"{result} is added to your order", on=colors.background["green"], end="\n"
-    )
-
-while True:
-    options = list(map(lambda x: str(x), MCDONALDS_BEVERAGES_OPTIONS))
-    bullet = Bullet(prompt="Add a beverage", choices=options, bullet="=> ")
-    result = bullet.launch()
-    utils.clearConsoleUp(7)
-    option = get_option_from_result(result, MCDONALDS_BEVERAGES_OPTIONS)
-    if result == str(MCDONALDS_BEVERAGES_OPTIONS[-1]):
-        break
-    order.append(PurchaseItem(option))
-    utils.cprint(
-        f"{result} is added to your order", on=colors.background["green"], end="\n"
-    )
-
-utils.clearConsoleUp(1)
-print()
-
-print_order(order)
+if _name_ == "_main_":
+    shell = McDonaldsShell()
+    shell.take_order()
+    shell.print_bill()
